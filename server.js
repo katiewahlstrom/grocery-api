@@ -130,6 +130,7 @@ app.delete("/api/products/:id", (request, response) => {
 });
 
 //starting my server
-app.listen(3000, () => {
+const port = process.env.PORT ? process.env.PORT : 3000;
+app.listen(port, () => {
   console.log("grocery API Server Started!");
 });
