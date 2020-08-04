@@ -1,24 +1,24 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-fs = require("fs");
+const cors = require("cors");
+const dataAccessLayer = require("./dataAccessLayer");
+const { ObjectId, ObjectID } = require("mongodb");
+
+dataAccessLayer.connect();
 
 //creating my Server
 const app = express();
 
-//installing the body-parser middleware
+//installing the CORS middleward
+//allows us (the server) to respond to
+//requests from a different origin (URL)
+//that the server.
+app.use(cors());
+//installing the body-parser
 //allow us to read JSON from requests
 app.use(bodyParser.json());
 
 //read in JSON file (mock database)
-let products = [];
-
-try {
-  products = JSON.parse(fs.readFileSync("products.json")).products;
-} catch (error) {
-  console.log("No existing file.");
-}
-
-console.log(products);
 
 //defining our HTTP resourse methods
 //endpoints
@@ -26,106 +26,122 @@ console.log(products);
 
 //GET ALL PRODUCTS
 //GET /api/products
-app.get("/api/products", (request, response) => {
+app.get("/api/products", async (request, response) => {
+  const products = await dataAccessLayer.findAll();
+
   response.send(products);
 });
 
 //GET A SPECIFIC PRODUCT BY ID
 //GET /api/products/:id
 
-app.get("/api/products/:id", (request, response) => {
-  const productId = Number(request.params.id);
-
-  const product = products.find((p) => {
-    if (productId === p.id) {
-      return true;
-    }
-  });
-
-  if (!product) {
-    response.send(`product with id ${productId} not found!`);
+app.get("/api/products/:id", async (request, response) => {
+  const productId = request.params.id;
+  if (!ObjectID.isValid(productId)) {
+    response.status(400).send(`ProductID ${productId} is incorrect.`);
     return;
   }
+  const productQuery = {
+    _id: new ObjectId(productId),
+  };
+  let product;
 
+  try {
+    product = await dataAccessLayer.findOne(productQuery);
+  } catch (error) {
+    response.status(404).send(`product with id ${productId} not found`);
+    return;
+  }
   response.send(product);
 });
 
 //CREATE A NEW PRODUCT
 //POST /api/products { id: 123, name "apples", price: 1.99  }
 
-app.post("/api/products", (request, response) => {
+app.post("/api/products", async (request, response) => {
   //read the json body from the request
   const body = request.body;
-  console.log(body);
+
   //validate the json body to have the required properties
   /* Required Properties: 
-    -id
     -name
     -price
+    -category
     */
-  if (!body.id || !body.name || !body.price) {
-    response.send("Bad Request. Validation Error.  Missing id, name or price");
+  if (!body.name || !body.price || !body.category) {
+    response
+      .status(400)
+      .send("Bad Request. Validation Error.  Missing name, price or category!");
     return;
   }
-  // Add the new product to our existing products array
-  products.push(body);
 
-  //commit the new products array to the database (json file)
+  //Validate data types of properties
+  // name => non-empty string
+  //price => Greter than 0 Number
+  //category => non-empty string
 
-  const jsonPayload = {
-    products: products,
-  };
-  fs.writeFileSync("products.json", JSON.stringify(jsonPayload));
+  if (body.name && typeof body.name !== "string") {
+    response.status(400).send("The name parameter muct be of type string.");
+    return;
+  }
+  if (body.category && typeof body.category !== "string") {
+    response.status(400).send("The category parameter muct be of type string.");
+    return;
+  }
 
-  response.send();
+  if (body.price && isNaN(Number(body.price))) {
+    response
+      .status(400)
+      .send("The price parameter must be of type price and greater than 0.");
+    return;
+  }
+  let myResponse = await dataAccessLayer.insertOne(body);
+
+  response.status(201).send(myResponse.ops);
 });
 
 //UPDATE EXISTING PRODUCT BY ID
 // PUT /api/products { id: 123, name "apples", price: 4.99  }
 
-app.put("/api/products/:id", (request, response) => {
-  const productId = Number(request.params.id);
+app.put("/api/products/:id", async (request, response) => {
+  const productId = ObjectId(request.params.id);
+  const body = request.body;
 
-  const product = products.find((p) => {
-    return productId === p.id;
-  });
-  if (!product) {
-    response.send(`Product with id ${productId} not found!`);
+  if (!ObjectId.isValid(productId)) {
+    console.log("PUT product Id", !ObjectID.isValid(productId));
+    response.status(400).send(`ProductId ${productId} is incorrect.`);
     return;
   }
 
-  const body = request.body;
+  const productQuery = {
+    _id: new ObjectId(productId),
+  };
 
-  if (body.name) {
-    product.name = body.name;
-  }
-
-  if (body.price) {
-    product.price = body.price;
-  }
+  await dataAccessLayer.updateOne(productQuery, body);
+  response.send();
 
   // DELETE EXISTING PRODUCT BY ID
   //DELETE /api/products/:id
 });
 
-app.delete("/api/products/:id", (request, response) => {
-  const productId = Number(request.params.id);
+app.delete("/api/products/:id", async (request, response) => {
+  const productId = request.params.id;
 
-  const productIndex = products.findIndex((p) => {
-    return productId === p.id;
-  });
-
-  if (productIndex === -1) {
-    response.sendStatus(`product with ID ${productId} not found!`);
+  if (!ObjectID.isValid(productId)) {
+    response.status(400).send(`ProductID ${productId} is incorrect.`);
+    return;
   }
 
-  products.splice(productIndex, 1);
-
-  const jsonPayload = {
-    products: products,
+  const productQuery = {
+    _id: new ObjectId(productId),
   };
-  fs.writeFileSync("products.json", JSON.stringify(jsonPayload));
-
+  try {
+    await dataAccessLayer.updateOne(productQuery, body);
+  } catch (error) {
+    response.status(404).send(`product with id ${productId} not found`);
+    return;
+  }
+  await dataAccessLayer.deleteOne(productQuery);
   response.send();
 });
 
