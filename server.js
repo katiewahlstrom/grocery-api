@@ -104,7 +104,7 @@ app.post("/api/products", async (request, response) => {
 // PUT /api/products { id: 123, name "apples", price: 4.99  }
 
 app.put("/api/products/:id", async (request, response) => {
-  const productId = ObjectId(request.params.id);
+  const productId = request.params.id;
   const body = request.body;
 
   if (!ObjectId.isValid(productId)) {
@@ -117,8 +117,9 @@ app.put("/api/products/:id", async (request, response) => {
     _id: new ObjectId(productId),
   };
 
-  await dataAccessLayer.updateOne(productQuery, body);
-  response.send();
+  let result = await dataAccessLayer.updateOne(productQuery, body);
+  console.log("working", result);
+  response.send(result);
 
   // DELETE EXISTING PRODUCT BY ID
   //DELETE /api/products/:id
@@ -136,17 +137,17 @@ app.delete("/api/products/:id", async (request, response) => {
     _id: new ObjectId(productId),
   };
   try {
-    await dataAccessLayer.updateOne(productQuery, body);
+    await dataAccessLayer.deleteOne(productQuery);
   } catch (error) {
     response.status(404).send(`product with id ${productId} not found`);
     return;
   }
-  await dataAccessLayer.deleteOne(productQuery);
+
   response.send();
 });
 
 //starting my server
-const port = process.env.PORT ? process.env.PORT : 3000;
+const port = process.env.PORT ? process.env.PORT : 3005;
 app.listen(port, () => {
   console.log("grocery API Server Started!");
 });

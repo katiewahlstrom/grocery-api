@@ -121,8 +121,8 @@ const updateOne = function (query, newProduct) {
           reject(error);
           return;
         } else if (result.modifiedCount === 0) {
-          console.log("No Document Found");
-          reject("No Document Found");
+          console.log("No Document Found or No Modification Made");
+          reject("No Document Found or No Modification Made");
           return;
         }
 
